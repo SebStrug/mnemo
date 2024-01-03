@@ -1,0 +1,5 @@
+/target
+
+# Keep a single example text
+texts/*.txt
+!texts/romeo_and_juliet.txt
