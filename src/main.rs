@@ -4,6 +4,7 @@ use std::io::{stdin, stdout, Write};
 use termion::event::Key;
 use termion::input::TermRead;
 use termion::raw::IntoRawMode;
+use termion::style;
 
 enum NavCommand {
     FromBeginning,
@@ -65,15 +66,22 @@ fn main() {
     let mut stdout = stdout().into_raw_mode().unwrap();
     write!(
         stdout,
-        "{}{}Mnemo!{}q to exit.{}h for help.{}l to list texts.{}e to enter a text.{}",
+        "{}{}{bold}{italic}Mnemo!{style_reset}
+        {goto2}{bold}q{style_reset} to exit.
+        {goto3}{bold}h{style_reset} for help.
+        {goto4}{bold}l{style_reset} to list texts.
+        {goto5}{bold}e{style_reset} to enter a text.{hide_cursor}",
         // Clear screen, go to start, hide cursor
         termion::clear::All,
         termion::cursor::Goto(1, 1),
-        termion::cursor::Goto(1, 2),
-        termion::cursor::Goto(1, 3),
-        termion::cursor::Goto(1, 4),
-        termion::cursor::Goto(1, 5),
-        termion::cursor::Hide
+        bold=style::Bold,
+        italic=style::Italic,
+        style_reset=style::Reset,
+        goto2=termion::cursor::Goto(1, 2),
+        goto3=termion::cursor::Goto(1, 3),
+        goto4=termion::cursor::Goto(1, 4),
+        goto5=termion::cursor::Goto(1, 5),
+        hide_cursor=termion::cursor::Hide
     )
     .unwrap();
     stdout.flush().unwrap();
@@ -129,10 +137,13 @@ fn main() {
                 Some(NavCommand::Quit) => break,
                 Some(NavCommand::Help) =>  write!(
                     stdout,
-                    "{}{}Mnemo is a tiny app to help you memorise short texts like poems, book openings, or quotes.{}Save the text into 'texts/' and then run Mnemo",
+                    "{}{}{bold}{italic}Mnemo{reset} is a tiny app to help you memorise short texts like poems, book openings, or quotes.{}Save the text into {italic}'texts/'{reset} and then run {bold}{italic}Mnemo{reset}",
                     termion::clear::All,
                     termion::cursor::Goto(1, 1),
                     termion::cursor::Goto(1, 3),
+                    bold=style::Bold,
+                    italic=style::Italic,
+                    reset=style::Reset,
                 ).unwrap(),
                 Some(NavCommand::ListTexts) => write!(
                     stdout,
