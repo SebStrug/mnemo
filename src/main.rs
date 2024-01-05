@@ -14,7 +14,7 @@ enum NavCommand {
     Quit,
     Help,
     ListTexts,
-    GetText,
+    EnterText,
 }
 
 impl NavCommand {
@@ -27,26 +27,52 @@ impl NavCommand {
             Key::Char('q') => Some(Self::Quit),
             Key::Char('h') => Some(Self::Help),
             Key::Char('l') => Some(Self::ListTexts),
-            Key::Char('e') => Some(Self::GetText),
+            Key::Char('e') => Some(Self::EnterText),
             _ => None,
         }
     }
 }
 
-fn main() {
-    // let text: Vec<String> = collect_text(arg);
+struct Text {
+    lines: Vec<String>,
+    curr_line_ind: usize,
+    curr_word_ind: usize,
+    length: usize,
+}
 
+impl Text {
+    pub fn new(text: Vec<String>) -> Text {
+        let len = &text.len();
+        Text {
+            lines: text,
+            curr_line_ind: 0,
+            curr_word_ind: 0,
+            length: *len,
+        }
+    }
+
+    pub fn get_curr_line(&self) -> Option<&str> {
+        if self.curr_line_ind < self.length {
+            Some(&self.lines[self.curr_line_ind])
+        } else {
+            None
+        }
+    }
+}
+
+fn main() {
     let stdin = stdin();
     let mut stdout = stdout().into_raw_mode().unwrap();
     write!(
         stdout,
-        "{}{}Mnemo!{}q to exit.{}l to list texts.{}e to enter a text.{}",
+        "{}{}Mnemo!{}q to exit.{}h for help.{}l to list texts.{}e to enter a text.{}",
         // Clear screen, go to start, hide cursor
         termion::clear::All,
         termion::cursor::Goto(1, 1),
         termion::cursor::Goto(1, 2),
         termion::cursor::Goto(1, 3),
         termion::cursor::Goto(1, 4),
+        termion::cursor::Goto(1, 5),
         termion::cursor::Hide
     )
     .unwrap();
@@ -58,8 +84,7 @@ fn main() {
     let mut stdout_index: u16 = 1;
 
     // Vars to help with iterating through text
-    let mut text: Option<Vec<String>> = None;
-    let mut curr_line: usize = 0;
+    let mut text: Option<Text> = None;
 
     for c in stdin.keys() {
         let key = &c.as_ref().unwrap();
@@ -81,7 +106,7 @@ fn main() {
                 }
                 Key::Char(ch) => {
                     let writer =
-                        write!(stdout, "{}{}", termion::cursor::Goto(stdout_index, 1), &ch);
+                        write!(stdout, "{}{}", termion::cursor::Goto(stdout_index, 2), &ch);
                     text_from_keys.push(*ch);
                     stdout_index += 1;
                     writer.unwrap();
@@ -96,7 +121,7 @@ fn main() {
                 stdout,
                 "{}{}",
                 termion::cursor::Goto(1, 1),
-                termion::clear::CurrentLine,
+                termion::clear::All,
             )
             .unwrap();
 
@@ -116,19 +141,26 @@ fn main() {
                     termion::cursor::Goto(1, 1),
                     collect_all_texts()
                 ).unwrap(),
-                Some(NavCommand::GetText) => {
+                Some(NavCommand::EnterText) => {
                     text_input_mode = true;
+                    write!(stdout, "{}{}Entering text:", 
+                    termion::clear::All,
+                    termion::cursor::Goto(1, 1)
+                ).unwrap();
                 },
                 Some(NavCommand::NextLine) => {
-                    if let Some(t) = &text {
-                        curr_line += 1;
-                        let line = &t[curr_line];
-                        write!(
-                            stdout,
-                            "{}{}",
-                            termion::cursor::Goto(1, (curr_line+1) as u16),
-                            line
-                        ).unwrap();
+                    if let Some(t) = &mut text {
+                        t.curr_line_ind += 1;
+                        if let Some(l) = t.get_curr_line() {
+                            write!(
+                                stdout,
+                                "{}{}",
+                                termion::cursor::Goto(1, (t.curr_line_ind+1) as u16),
+                                l
+                            ).unwrap();
+                        } else {
+                            t.curr_line_ind -= 1;
+                        }
                     }
                 }
                 _ => write!(stdout, "Unhandled key").unwrap(),
@@ -151,7 +183,7 @@ fn collect_all_texts() -> Vec<String> {
     text_paths
 }
 
-fn collect_text(query: &str) -> Vec<String> {
+fn collect_text(query: &str) -> Text {
     // Artisanal hand-crafted path
     let mut text_fpath = "texts/".to_owned();
     text_fpath.push_str(query);
@@ -159,5 +191,6 @@ fn collect_text(query: &str) -> Vec<String> {
 
     let contents = fs::read_to_string(text_fpath).expect("No such text found");
     // Each string has to be owned
-    contents.split('\n').map(|s| s.to_owned()).collect()
+    let text = contents.split('\n').map(|s| s.to_owned()).collect();
+    Text::new(text)
 }
