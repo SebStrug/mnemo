@@ -1,36 +1,49 @@
+use std::fs;
 use std::io::{stdin, stdout, Write};
-use std::{env, fs, process::exit};
 
 use termion::event::Key;
 use termion::input::TermRead;
 use termion::raw::IntoRawMode;
 
-fn main() {
-    let args: Vec<String> = env::args().collect();
-    if args.len() < 2 {
-        panic!("Requires one argument: the name of the text. See `-l` for options")
-    } else if args.len() > 2 {
-        panic!("Should only pass one argument: the name of the text")
-    }
-    let arg: &String = &args[1];
+enum NavCommand {
+    FromBeginning,
+    PrevLine,
+    NextLine,
+    ToEnd,
+    // General controls
+    Quit,
+    Help,
+    ListTexts,
+}
 
-    let mut text_index: usize = 0;
-    match arg.as_str() {
-        "-h" | "--help" => help(),
-        "-l" | "--list" => list_texts(),
-        _ => ()
+impl NavCommand {
+    fn from_event(char: &Key) -> Option<Self> {
+        match char {
+            Key::Char('z') => Some(Self::FromBeginning),
+            Key::Char('x') => Some(Self::PrevLine),
+            Key::Char('c') => Some(Self::NextLine),
+            Key::Char('v') => Some(Self::ToEnd),
+            Key::Char('q') => Some(Self::Quit),
+            Key::Char('h') => Some(Self::Help),
+            Key::Char('l') => Some(Self::ListTexts),
+            _ => None,
+        }
     }
-    let text: Vec<String> = collect_text(arg);
+}
+
+fn main() {
+    // let text: Vec<String> = collect_text(arg);
 
     let stdin = stdin();
     let mut stdout = stdout().into_raw_mode().unwrap();
     write!(
         stdout,
-        "{}{}Mnemo!\nText: {}\nq to exit.{}",
+        "{}{}Mnemo!{}q to exit.{}l to list texts.{}",
         // Clear screen, go to start, hide cursor
         termion::clear::All,
         termion::cursor::Goto(1, 1),
-        arg,
+        termion::cursor::Goto(1, 2),
+        termion::cursor::Goto(1, 3),
         termion::cursor::Hide
     )
     .unwrap();
@@ -45,13 +58,27 @@ fn main() {
         )
         .unwrap();
 
-        match c.unwrap() {
-            Key::Char('q') => break,
-            Key::Char('c') => {
-                write!(stdout, "{}", &text[text_index]).unwrap();
-                text_index += 1;
-            },
-            _ => write!(stdout, "{}", "Unhandled char").unwrap(),
+        match NavCommand::from_event(&c.unwrap()) {
+            Some(NavCommand::Quit) => break,
+            Some(NavCommand::Help) =>  write!(
+                stdout,
+                "{}{}Mnemo is a tiny app to help you memorise short texts like poems, book openings, or quotes.{}Save the text into 'texts/' and then run Mnemo",
+                termion::clear::All,
+                termion::cursor::Goto(1, 1),
+                termion::cursor::Goto(1, 3),
+            ).unwrap(),
+            Some(NavCommand::ListTexts) => write!(
+                stdout,
+                "{}{}Available texts: {:?}",
+                termion::clear::All,
+                termion::cursor::Goto(1, 1),
+                collect_all_texts()
+            ).unwrap(),
+            // Some(NavCommand::NextLine) => {
+            //     write!(stdout, "{}", &text[text_index]).unwrap();
+            //     text_index += 1;
+            // }
+            _ => write!(stdout, "Unhandled char").unwrap(),
         }
 
         stdout.flush().unwrap();
@@ -59,19 +86,15 @@ fn main() {
     write!(stdout, "{}", termion::cursor::Show).unwrap();
 }
 
-fn help() {
-    println!("Mnemo is a tiny app to help you memorise texts like poetry or book openings");
-    println!("Save the text into 'texts/' and then run it");
-    exit(1);
-}
-
-fn list_texts() {
-    println!("Available texts:");
-    let paths = fs::read_dir("texts/").unwrap();
-    for path in paths {
-        println!("Text: {:?}", path.unwrap().path().file_stem().unwrap())
+fn collect_all_texts() -> Vec<String> {
+    let dir_entries = fs::read_dir("texts/").unwrap();
+    let mut text_paths: Vec<String> = Vec::new();
+    for dir_entry in dir_entries {
+        let path = dir_entry.unwrap().path();
+        let text_path = path.file_stem().unwrap().to_str().unwrap();
+        text_paths.push(text_path.to_string());
     }
-    exit(1);
+    text_paths
 }
 
 fn collect_text(query: &str) -> Vec<String> {
