@@ -1,21 +1,35 @@
 use std::fs;
-use std::io::{stdin, stdout, Write};
+use std::io::{stdin, stdout, Stdout, Write};
 
 use termion::event::Key;
 use termion::input::TermRead;
-use termion::raw::IntoRawMode;
+use termion::raw::{IntoRawMode, RawTerminal};
 use termion::style;
+
+enum NavMenu {
+    Quit,
+    Help,
+    ListTexts,
+    EnterText,
+}
+
+impl NavMenu {
+    fn from_event(char: &Key) -> Option<Self> {
+        match char {
+            Key::Char('q') => Some(Self::Quit),
+            Key::Char('h') => Some(Self::Help),
+            Key::Char('l') => Some(Self::ListTexts),
+            Key::Char('e') => Some(Self::EnterText),
+            _ => None,
+        }
+    }
+}
 
 enum NavCommand {
     FromBeginning,
     PrevLine,
     NextLine,
     ToEnd,
-    // General controls
-    Quit,
-    Help,
-    ListTexts,
-    EnterText,
 }
 
 impl NavCommand {
@@ -25,13 +39,16 @@ impl NavCommand {
             Key::Char('x') => Some(Self::PrevLine),
             Key::Char('c') => Some(Self::NextLine),
             Key::Char('v') => Some(Self::ToEnd),
-            Key::Char('q') => Some(Self::Quit),
-            Key::Char('h') => Some(Self::Help),
-            Key::Char('l') => Some(Self::ListTexts),
-            Key::Char('e') => Some(Self::EnterText),
             _ => None,
         }
     }
+}
+
+struct MnemoState {
+    entering_text: bool,
+    navigating_text: bool,
+    requested_text: String,
+    stdout_index: u16,
 }
 
 struct Text {
@@ -64,118 +81,141 @@ impl Text {
 fn main() {
     let stdin = stdin();
     let mut stdout = stdout().into_raw_mode().unwrap();
-    write!(
-        stdout,
-        "{}{}{bold}{italic}Mnemo!{style_reset}
-        {goto2}{bold}q{style_reset} to exit.
-        {goto3}{bold}h{style_reset} for help.
-        {goto4}{bold}l{style_reset} to list texts.
-        {goto5}{bold}e{style_reset} to enter a text.{hide_cursor}",
-        // Clear screen, go to start, hide cursor
-        termion::clear::All,
-        termion::cursor::Goto(1, 1),
-        bold=style::Bold,
-        italic=style::Italic,
-        style_reset=style::Reset,
-        goto2=termion::cursor::Goto(1, 2),
-        goto3=termion::cursor::Goto(1, 3),
-        goto4=termion::cursor::Goto(1, 4),
-        goto5=termion::cursor::Goto(1, 5),
-        hide_cursor=termion::cursor::Hide
-    )
-    .unwrap();
+    intro_message(&mut stdout);
     stdout.flush().unwrap();
 
-    // Vars to help with entering text
-    let mut text_input_mode = false;
-    let mut text_from_keys = String::new();
-    let mut stdout_index: u16 = 1;
-
-    // Vars to help with iterating through text
-    let mut text: Option<Text> = None;
+    let mut state = MnemoState {
+        entering_text: false,
+        navigating_text: false,
+        requested_text: String::new(),
+        stdout_index: 1,
+    };
+    let mut text = Text {
+        lines: Vec::new(),
+        curr_line_ind: 0,
+        curr_word_ind: 0,
+        length: 0,
+    };
 
     for c in stdin.keys() {
         let key = &c.as_ref().unwrap();
 
-        if text_input_mode {
-            match key {
-                Key::Char('\n') => {
-                    text_input_mode = false;
-                    text = Some(collect_text(&text_from_keys));
-                    write!(
-                        stdout,
-                        "{}{}Entered text: {}{}Get the next line with 'c'",
-                        termion::clear::All,
-                        termion::cursor::Goto(1, 1),
-                        &text_from_keys,
-                        termion::cursor::Goto(1, 3),
-                    )
-                    .unwrap();
-                }
-                Key::Char(ch) => {
-                    let writer =
-                        write!(stdout, "{}{}", termion::cursor::Goto(stdout_index, 2), &ch);
-                    text_from_keys.push(*ch);
-                    stdout_index += 1;
-                    writer.unwrap();
-                }
-                _ => {
-                    write!(stdout, "Unrecognised character").unwrap();
-                    break;
-                }
-            }
-        } else {
-            write!(
+        // Main menu
+        match (state.entering_text, state.navigating_text, NavMenu::from_event(key)) {
+            (false, _, Some(NavMenu::Quit)) => break,
+            (false, false, Some(NavMenu::Help)) =>  write!(
                 stdout,
-                "{}{}",
-                termion::cursor::Goto(1, 1),
+                "{}{}{bold}{italic}Mnemo{reset} is a tiny app to help you memorise short texts like poems, book openings, or quotes.{}Save the text into {italic}'texts/'{reset} and then run {bold}{italic}Mnemo{reset}",
                 termion::clear::All,
-            )
-            .unwrap();
-
-            match NavCommand::from_event(&c.unwrap()) {
-                Some(NavCommand::Quit) => break,
-                Some(NavCommand::Help) =>  write!(
-                    stdout,
-                    "{}{}{bold}{italic}Mnemo{reset} is a tiny app to help you memorise short texts like poems, book openings, or quotes.{}Save the text into {italic}'texts/'{reset} and then run {bold}{italic}Mnemo{reset}",
-                    termion::clear::All,
-                    termion::cursor::Goto(1, 1),
-                    termion::cursor::Goto(1, 3),
-                    bold=style::Bold,
-                    italic=style::Italic,
-                    reset=style::Reset,
-                ).unwrap(),
-                Some(NavCommand::ListTexts) => write!(
-                    stdout,
-                    "{}{}Available texts: {:?}",
-                    termion::clear::All,
-                    termion::cursor::Goto(1, 1),
-                    collect_all_texts()
-                ).unwrap(),
-                Some(NavCommand::EnterText) => {
-                    text_input_mode = true;
-                    write!(stdout, "{}{}Entering text:", 
+                termion::cursor::Goto(1, 1),
+                termion::cursor::Goto(1, 3),
+                bold=style::Bold,
+                italic=style::Italic,
+                reset=style::Reset,
+            ).unwrap(),
+            (false, false, Some(NavMenu::ListTexts)) => write!(
+                stdout,
+                "{}{}Available texts: {:?}",
+                termion::clear::All,
+                termion::cursor::Goto(1, 1),
+                collect_all_texts()
+            ).unwrap(),
+            (false, false, Some(NavMenu::EnterText)) => {
+                state.entering_text = true;
+                write!(stdout, "{}{}Entering text:", 
                     termion::clear::All,
                     termion::cursor::Goto(1, 1)
                 ).unwrap();
-                },
-                Some(NavCommand::NextLine) => {
-                    if let Some(t) = &mut text {
-                        t.curr_line_ind += 1;
-                        if let Some(l) = t.get_curr_line() {
-                            write!(
-                                stdout,
-                                "{}{}",
-                                termion::cursor::Goto(1, (t.curr_line_ind+1) as u16),
-                                l
-                            ).unwrap();
-                        } else {
-                            t.curr_line_ind -= 1;
-                        }
-                    }
-                }
-                _ => write!(stdout, "Unhandled key").unwrap(),
+                // Flush and continue otherwise first character of entered text will always be 'e'
+                stdout.flush().unwrap();
+                continue;
+            },
+            (false, false, _) => {
+                write!(stdout, "Unhandled character").unwrap();
+            },
+            _ => (),
+        }
+
+        // Entering a text to mnemorise
+        match (state.entering_text, key) {
+            (true, Key::Char('\n')) => {
+                state.entering_text = false;
+                state.navigating_text = true;
+                text = collect_text(&state.requested_text);
+                write!(
+                    stdout,
+                    "{}{}Entered text: {}
+                    {}Get the next line with 'c'
+                    {}Get the previous line with 'x'
+                    ",
+                    termion::clear::All,
+                    termion::cursor::Goto(1, 1),
+                    &state.requested_text,
+                    termion::cursor::Goto(1, 3),
+                    termion::cursor::Goto(1, 4),
+                )
+                .unwrap();
             }
+            (true, Key::Char(ch)) => {
+                let writer = write!(
+                    stdout,
+                    "{}{}",
+                    termion::cursor::Goto(state.stdout_index, 2),
+                    &ch
+                );
+                state.requested_text.push(*ch);
+                state.stdout_index += 1;
+                writer.unwrap();
+            }
+            (true, Key::Backspace) => {
+                state.stdout_index -= 1;
+                state.requested_text.pop();
+                write!(
+                    stdout,
+                    "{}{}",
+                    termion::cursor::Goto(state.stdout_index, 2),
+                    termion::clear::AfterCursor
+                )
+                .unwrap();
+            }
+            _ => (),
+        }
+
+        // Navigating the text
+        match (state.navigating_text, NavCommand::from_event(&c.unwrap())) {
+            (true, Some(NavCommand::NextLine)) => {
+                // Clear the leftover helping info about how to navigate a text, when we state navigating
+                if text.curr_line_ind == 0 {
+                    write!(stdout, "{}", termion::clear::All).unwrap();
+                }
+
+                // We may have no more lines to print!
+                if let Some(l) = text.get_curr_line() {
+                    write!(
+                        stdout,
+                        "{}{}",
+                        termion::cursor::Goto(1, (text.curr_line_ind + 1) as u16),
+                        l
+                    )
+                    .unwrap();
+                    text.curr_line_ind += 1;
+                }
+            }
+            (true, Some(NavCommand::PrevLine)) => {
+                if text.curr_line_ind == 0 {
+                    write!(stdout, "{}", termion::clear::All).unwrap();
+                } else if text.curr_line_ind > 0 {
+                    write!(
+                        stdout,
+                        "{}{}",
+                        termion::clear::CurrentLine,
+                        termion::cursor::Goto(1, text.curr_line_ind as u16)
+                    )
+                    .unwrap();
+                    text.curr_line_ind -= 1;
+                }
+            }
+            _ => (),
         }
         stdout.flush().unwrap();
     }
@@ -199,9 +239,39 @@ fn collect_text(query: &str) -> Text {
     let mut text_fpath = "texts/".to_owned();
     text_fpath.push_str(query);
     text_fpath.push_str(".txt");
+    let text_fpath = &text_fpath[..];
 
-    let contents = fs::read_to_string(text_fpath).expect("No such text found");
+    let contents = match fs::read_to_string(text_fpath) {
+        Ok(c) => c,
+        Err(_) => {
+            println!("\nNo such text found {:?}", &text_fpath);
+            panic!("No text found");
+        }
+    };
     // Each string has to be owned
     let text = contents.split('\n').map(|s| s.to_owned()).collect();
     Text::new(text)
+}
+
+fn intro_message(stdout: &mut RawTerminal<Stdout>) {
+    write!(
+        stdout,
+        "{}{}{bold}{italic}Mnemo!{style_reset}
+        {goto2}{bold}q{style_reset} to exit.
+        {goto3}{bold}h{style_reset} for help.
+        {goto4}{bold}l{style_reset} to list texts.
+        {goto5}{bold}e{style_reset} to enter a text.{hide_cursor}",
+        // Clear screen, go to start, hide cursor
+        termion::clear::All,
+        termion::cursor::Goto(1, 1),
+        bold = style::Bold,
+        italic = style::Italic,
+        style_reset = style::Reset,
+        goto2 = termion::cursor::Goto(1, 2),
+        goto3 = termion::cursor::Goto(1, 3),
+        goto4 = termion::cursor::Goto(1, 4),
+        goto5 = termion::cursor::Goto(1, 5),
+        hide_cursor = termion::cursor::Hide
+    )
+    .unwrap();
 }
