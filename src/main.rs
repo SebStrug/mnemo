@@ -1,6 +1,7 @@
 use std::fs;
 use std::io::{stdin, stdout, Stdout, Write};
 
+use termion::color;
 use termion::event::Key;
 use termion::input::TermRead;
 use termion::raw::{IntoRawMode, RawTerminal};
@@ -74,6 +75,14 @@ impl Text {
             Some(&self.lines[self.curr_line_ind])
         } else {
             None
+        }
+    }
+
+    pub fn get_line_by_ind(&self, ind: &usize) -> Option<&str> {
+        if (ind < &0) | (ind > &(&self.length - 1)){
+            None
+        } else {
+            Some(&self.lines[*ind])
         }
     }
 }
@@ -184,35 +193,48 @@ fn main() {
         // Navigating the text
         match (state.navigating_text, NavCommand::from_event(&c.unwrap())) {
             (true, Some(NavCommand::NextLine)) => {
-                // Clear the leftover helping info about how to navigate a text, when we state navigating
+                // When entering navigation mode, clear the leftover helping info about how to navigate a text
                 if text.curr_line_ind == 0 {
                     write!(stdout, "{}", termion::clear::All).unwrap();
                 }
 
+                text.curr_line_ind += 1;
                 // We may have no more lines to print!
-                if let Some(l) = text.get_curr_line() {
+                if let Some(l) = text.get_line_by_ind(&text.curr_line_ind) {
+                    // If there's a previous line, remove its color
+                    if let Some(prev_l) = text.get_line_by_ind(&(text.curr_line_ind - 1)) {
+                        write!(
+                            stdout,
+                            "{}{}{}",
+                            color::Fg(color::Reset),
+                            termion::cursor::Goto(1, (text.curr_line_ind - 1) as u16),
+                            prev_l
+                        ).unwrap();
+                    }
                     write!(
                         stdout,
-                        "{}{}",
-                        termion::cursor::Goto(1, (text.curr_line_ind + 1) as u16),
+                        "{}{}{}",
+                        color::Fg(color::LightCyan),
+                        termion::cursor::Goto(1, (text.curr_line_ind) as u16),
                         l
                     )
                     .unwrap();
-                    text.curr_line_ind += 1;
                 }
             }
             (true, Some(NavCommand::PrevLine)) => {
                 if text.curr_line_ind == 0 {
                     write!(stdout, "{}", termion::clear::All).unwrap();
                 } else if text.curr_line_ind > 0 {
+                    write!(stdout, "{}", termion::clear::CurrentLine).unwrap();
+                    text.curr_line_ind -= 1;
                     write!(
                         stdout,
-                        "{}{}",
-                        termion::clear::CurrentLine,
-                        termion::cursor::Goto(1, text.curr_line_ind as u16)
+                        "{}{}{}",
+                        termion::cursor::Goto(1, text.curr_line_ind as u16),
+                        color::Fg(color::LightCyan),
+                        text.get_line_by_ind(&text.curr_line_ind).unwrap()
                     )
                     .unwrap();
-                    text.curr_line_ind -= 1;
                 }
             }
             _ => (),
