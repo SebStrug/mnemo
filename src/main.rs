@@ -101,10 +101,12 @@ fn main() {
     };
 
     for c in stdin.keys() {
-        let key = &c.as_ref().unwrap();
+        let key = &c.unwrap();
 
         // Classic developer panic
-        if key == &&Key::Ctrl('c') { break };
+        if key == &Key::Ctrl('c') {
+            break;
+        };
 
         // Main menu
         match (state.entering_text, state.navigating_text, NavMenu::from_event(key)) {
@@ -192,7 +194,7 @@ fn main() {
         }
 
         // Navigating the text
-        match (state.navigating_text, NavCommand::from_event(&c.unwrap())) {
+        match (state.navigating_text, NavCommand::from_event(key)) {
             (true, Some(NavCommand::NextLine)) => {
                 // When entering navigation mode, clear the leftover helping info about how to navigate a text
                 if text.curr_line_ind == 0 {
