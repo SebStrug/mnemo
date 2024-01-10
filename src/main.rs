@@ -12,6 +12,7 @@ enum NavMenu {
     Help,
     ListTexts,
     EnterText,
+    MainMenu,
 }
 
 impl NavMenu {
@@ -21,6 +22,7 @@ impl NavMenu {
             Key::Char('h') => Some(Self::Help),
             Key::Char('l') => Some(Self::ListTexts),
             Key::Char('e') => Some(Self::EnterText),
+            Key::Char('m') => Some(Self::MainMenu),
             _ => None,
         }
     }
@@ -70,16 +72,8 @@ impl Text {
         }
     }
 
-    pub fn get_curr_line(&self) -> Option<&str> {
-        if self.curr_line_ind < self.length {
-            Some(&self.lines[self.curr_line_ind])
-        } else {
-            None
-        }
-    }
-
     pub fn get_line_by_ind(&self, ind: &usize) -> Option<&str> {
-        if (ind < &0) | (ind > &(&self.length - 1)){
+        if (ind < &0) | (ind > &(&self.length - 1)) {
             None
         } else {
             Some(&self.lines[*ind])
@@ -114,20 +108,24 @@ fn main() {
             (false, _, Some(NavMenu::Quit)) => break,
             (false, false, Some(NavMenu::Help)) =>  write!(
                 stdout,
-                "{}{}{bold}{italic}Mnemo{reset} is a tiny app to help you memorise short texts like poems, book openings, or quotes.{}Save the text into {italic}'texts/'{reset} and then run {bold}{italic}Mnemo{reset}",
+                "{}{}{bold}{italic}Mnemo{reset} is a tiny app to help you memorise short texts like poems, book openings, or quotes.{}Save the text into {italic}'texts/'{reset} and then run {bold}{italic}Mnemo{reset}
+                {}Press 'm' to go back to the main menu",
                 termion::clear::All,
                 termion::cursor::Goto(1, 1),
                 termion::cursor::Goto(1, 3),
+                termion::cursor::Goto(1, 5),
                 bold=style::Bold,
                 italic=style::Italic,
                 reset=style::Reset,
             ).unwrap(),
+            (false, _, Some(NavMenu::MainMenu)) => intro_message(&mut stdout),
             (false, false, Some(NavMenu::ListTexts)) => write!(
                 stdout,
-                "{}{}Available texts: {:?}",
+                "{}{}Available texts: {:?}{}Press 'm' to go back to the main menu",
                 termion::clear::All,
                 termion::cursor::Goto(1, 1),
-                collect_all_texts()
+                collect_all_texts(),
+                termion::cursor::Goto(1, 3),
             ).unwrap(),
             (false, false, Some(NavMenu::EnterText)) => {
                 state.entering_text = true;
@@ -140,7 +138,7 @@ fn main() {
                 continue;
             },
             (false, false, _) => {
-                write!(stdout, "Unhandled character").unwrap();
+                write!(stdout, "{}Unhandled character, press 'm' to go back to the main manu", termion::clear::All).unwrap();
             },
             _ => (),
         }
@@ -209,7 +207,8 @@ fn main() {
                             color::Fg(color::Reset),
                             termion::cursor::Goto(1, (text.curr_line_ind - 1) as u16),
                             prev_l
-                        ).unwrap();
+                        )
+                        .unwrap();
                     }
                     write!(
                         stdout,
