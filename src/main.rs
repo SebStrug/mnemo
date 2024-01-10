@@ -103,6 +103,9 @@ fn main() {
     for c in stdin.keys() {
         let key = &c.as_ref().unwrap();
 
+        // Classic developer panic
+        if key == &&Key::Ctrl('c') { break };
+
         // Main menu
         match (state.entering_text, state.navigating_text, NavMenu::from_event(key)) {
             (false, _, Some(NavMenu::Quit)) => break,
