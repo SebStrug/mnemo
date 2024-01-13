@@ -2,11 +2,11 @@ use std::fs;
 use std::io::{stdin, stdout, Stdout, Write};
 use std::process;
 
-use termion::color;
 use termion::event::Key;
 use termion::input::TermRead;
 use termion::raw::{IntoRawMode, RawTerminal};
 use termion::style;
+use termion::{clear, color, cursor};
 
 enum NavMenu {
     Quit,
@@ -33,7 +33,7 @@ enum NavCommand {
     FromBeginning,
     PrevLine,
     NextLine,
-    ToEnd,
+    NextWord,
 }
 
 impl NavCommand {
@@ -42,7 +42,7 @@ impl NavCommand {
             Key::Char('z') => Some(Self::FromBeginning),
             Key::Char('x') => Some(Self::PrevLine),
             Key::Char('c') => Some(Self::NextLine),
-            Key::Char('v') => Some(Self::ToEnd),
+            Key::Char('v') => Some(Self::NextWord),
             _ => None,
         }
     }
@@ -55,15 +55,20 @@ struct MnemoState {
     stdout_index: u16,
 }
 
+#[derive(Clone)]
+struct Line {
+    words: Vec<String>,
+}
+
 struct Text {
-    lines: Vec<String>,
+    lines: Vec<Line>,
     curr_line_ind: usize,
     curr_word_ind: usize,
     length: usize,
 }
 
 impl Text {
-    pub fn new(text: Vec<String>) -> Text {
+    pub fn new(text: Vec<Line>) -> Text {
         let len = &text.len();
         Text {
             lines: text,
@@ -73,11 +78,43 @@ impl Text {
         }
     }
 
-    pub fn get_line_by_ind(&self, ind: &usize) -> Option<&str> {
+    fn get_line_by_ind(&self, ind: &usize) -> Option<Line> {
         if (ind < &0) | (ind > &(&self.length - 1)) {
             None
         } else {
-            Some(&self.lines[*ind])
+            Some(self.lines[*ind].clone())
+        }
+    }
+
+    pub fn get_line(&self, line_ind: &usize) -> Option<String> {
+        if let Some(l) = self.get_line_by_ind(line_ind) {
+            Some(l.words.join(" "))
+        } else {
+            None
+        }
+    }
+
+    pub fn get_line_up_to_word(&self, line_ind: &usize, up_to_word_ind: &usize) -> Option<String> {
+        if let Some(l) = self.get_line_by_ind(line_ind) {
+            if *up_to_word_ind < l.words.len() {
+                Some(l.words[..*up_to_word_ind].join(" "))
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+
+    pub fn get_word(&self, line_ind: &usize, word_ind: &usize) -> Option<String> {
+        if let Some(l) = self.get_line_by_ind(line_ind) {
+            if let Some(w) = l.words.get(*word_ind) {
+                Some(w.to_owned())
+            } else {
+                None
+            }
+        } else {
+            None
         }
     }
 }
@@ -163,12 +200,14 @@ fn main() {
                     "{}{}Entered text: {}
                     {}Get the next line with 'c'
                     {}Get the previous line with 'x'
+                    {}Get the next word with 'v'
                     ",
                     termion::clear::All,
                     termion::cursor::Goto(1, 1),
                     &state.requested_text,
                     termion::cursor::Goto(1, 3),
                     termion::cursor::Goto(1, 4),
+                    termion::cursor::Goto(1, 5),
                 )
                 .unwrap();
             }
@@ -201,33 +240,50 @@ fn main() {
         match (state.navigating_text, NavCommand::from_event(key)) {
             (true, Some(NavCommand::NextLine)) => {
                 // When entering navigation mode, clear the leftover helping info about how to navigate a text
-                if text.curr_line_ind == 0 {
-                    write!(stdout, "{}", termion::clear::All).unwrap();
-                }
+                // if (text.curr_word_ind == 0) & (text.curr_line_ind == 0) {
+                //     write!(stdout, "{}", termion::clear::All).unwrap();
+                // }
 
-                text.curr_line_ind += 1;
-                // We may have no more lines to print!
-                if let Some(l) = text.get_line_by_ind(&text.curr_line_ind) {
+                // // Print the whole current line if we've already revealed some words
+                // if text.curr_word_ind > 0 {
+                //     write!(
+                //         stdout,
+                //         "{}{}{}",
+                //         clear::CurrentLine,
+                //         cursor::Goto(1, text.curr_line_ind as u16),
+                //         text.get_line(&text.curr_line_ind).unwrap()
+                //     )
+                //     .unwrap();
+                // } else if text.curr_word_ind == text.length {
+                //     text.curr_line_ind += 1;
+                // }
+
+                // We may have no more lines to print
+                println!("here 1");
+                if let Some(l) = text.get_line(&text.curr_line_ind) {
                     // If there's a previous line, remove its color
-                    if let Some(prev_l) = text.get_line_by_ind(&(text.curr_line_ind - 1)) {
-                        write!(
-                            stdout,
-                            "{}{}{}",
-                            color::Fg(color::Reset),
-                            termion::cursor::Goto(1, (text.curr_line_ind - 1) as u16),
-                            prev_l
-                        )
-                        .unwrap();
-                    }
-                    write!(
+                    // if text.curr_line_ind > 0 {
+                    //     let prev_line = text.get_line(&(text.curr_line_ind - 1)).unwrap();
+                    //     write!(
+                    //         stdout,
+                    //         "{}{}{}",
+                    //         cursor::Goto(1, (text.curr_line_ind - 1) as u16),
+                    //         color::Fg(color::Reset),
+                    //         prev_line
+                    //     ).unwrap();
+                    // }
+                    let writer = write!(
                         stdout,
                         "{}{}{}",
                         color::Fg(color::LightCyan),
                         termion::cursor::Goto(1, (text.curr_line_ind) as u16),
                         l
-                    )
-                    .unwrap();
+                    );
+                    text.curr_line_ind += 1;
+                    writer.unwrap();
                 }
+                // text.curr_line_ind += 1;
+                text.curr_word_ind = 0;
             }
             (true, Some(NavCommand::PrevLine)) => {
                 if text.curr_line_ind == 0 {
@@ -240,9 +296,42 @@ fn main() {
                         "{}{}{}",
                         termion::cursor::Goto(1, text.curr_line_ind as u16),
                         color::Fg(color::LightCyan),
-                        text.get_line_by_ind(&text.curr_line_ind).unwrap()
+                        text.get_line(&text.curr_line_ind).unwrap()
                     )
                     .unwrap();
+                }
+                text.curr_word_ind = 0;
+            }
+            (true, Some(NavCommand::NextWord)) => {
+                // If entering navigation mode and 'v' is the first key pressed, clear the leftover text about how to navigate a text
+                if (text.curr_line_ind == 0) & (text.curr_word_ind == 0) {
+                    write!(stdout, "{}", termion::clear::All).unwrap();
+                }
+
+                if let Some(word) = text.get_word(&text.curr_line_ind, &text.curr_word_ind) {
+                    // print previous words
+                    let part_line = text
+                        .get_line_up_to_word(&text.curr_line_ind, &text.curr_word_ind)
+                        .unwrap();
+                    let word_to_print = if text.curr_word_ind == 0 {
+                        word
+                    } else {
+                        format!(" {}", word)
+                    };
+                    write!(
+                        stdout,
+                        "{}{}{}{}{}",
+                        termion::clear::CurrentLine,
+                        termion::cursor::Goto(1, text.curr_line_ind as u16),
+                        part_line,
+                        termion::cursor::Goto(
+                            (part_line.len() + 1) as u16,
+                            text.curr_line_ind as u16
+                        ),
+                        word_to_print,
+                    )
+                    .unwrap();
+                    text.curr_word_ind += 1;
                 }
             }
             _ => (),
@@ -288,9 +377,17 @@ fn collect_text(query: &str, stdout: &mut RawTerminal<Stdout>) -> Text {
         println!("");
         process::exit(1);
     });
+
     // Each string has to be owned
-    let text = contents.split('\n').map(|s| s.to_owned()).collect();
-    Text::new(text)
+    let mut all_lines: Vec<Line> = Vec::new();
+    for split_line in contents.split('\n') {
+        let mut words: Vec<String> = Vec::new();
+        for word in split_line.split(' ') {
+            words.push(word.to_string());
+        }
+        all_lines.push(Line { words: words });
+    }
+    Text::new(all_lines)
 }
 
 fn intro_message(stdout: &mut RawTerminal<Stdout>) {
