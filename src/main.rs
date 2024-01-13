@@ -79,7 +79,7 @@ impl Text {
     }
 
     fn get_line_by_ind(&self, ind: &usize) -> Option<Line> {
-        if (ind < &0) | (ind > &(&self.length - 1)) {
+        if (ind < &0) || (ind > &(&self.length - 1)) {
             None
         } else {
             Some(self.lines[*ind].clone())
@@ -240,47 +240,46 @@ fn main() {
         match (state.navigating_text, NavCommand::from_event(key)) {
             (true, Some(NavCommand::NextLine)) => {
                 // When entering navigation mode, clear the leftover helping info about how to navigate a text
-                // if (text.curr_word_ind == 0) & (text.curr_line_ind == 0) {
-                //     write!(stdout, "{}", termion::clear::All).unwrap();
-                // }
+                if (text.curr_word_ind == 0) & (text.curr_line_ind == 0) {
+                    write!(stdout, "{}", termion::clear::All).unwrap();
+                }
 
-                // // Print the whole current line if we've already revealed some words
-                // if text.curr_word_ind > 0 {
-                //     write!(
-                //         stdout,
-                //         "{}{}{}",
-                //         clear::CurrentLine,
-                //         cursor::Goto(1, text.curr_line_ind as u16),
-                //         text.get_line(&text.curr_line_ind).unwrap()
-                //     )
-                //     .unwrap();
-                // } else if text.curr_word_ind == text.length {
-                //     text.curr_line_ind += 1;
-                // }
-
+                // Print the whole current line if we've already revealed some words
+                if text.curr_word_ind > 0 {
+                    write!(
+                        stdout,
+                        "{}{}{}",
+                        clear::CurrentLine,
+                        cursor::Goto(1, text.curr_line_ind as u16),
+                        text.get_line(&text.curr_line_ind).unwrap()
+                    )
+                    .unwrap();
+                } else if text.curr_word_ind == text.length {
+                    text.curr_line_ind += 1;
+                }
                 // We may have no more lines to print
-                println!("here 1");
                 if let Some(l) = text.get_line(&text.curr_line_ind) {
                     // If there's a previous line, remove its color
-                    // if text.curr_line_ind > 0 {
-                    //     let prev_line = text.get_line(&(text.curr_line_ind - 1)).unwrap();
-                    //     write!(
-                    //         stdout,
-                    //         "{}{}{}",
-                    //         cursor::Goto(1, (text.curr_line_ind - 1) as u16),
-                    //         color::Fg(color::Reset),
-                    //         prev_line
-                    //     ).unwrap();
-                    // }
-                    let writer = write!(
+                    if text.curr_line_ind > 0 {
+                        let prev_l = text.get_line(&(text.curr_line_ind - 1)).unwrap();
+                        write!(
+                            stdout,
+                            "{}{}{}",
+                            color::Fg(color::Reset),
+                            termion::cursor::Goto(1, (text.curr_line_ind) as u16),
+                            prev_l
+                        )
+                        .unwrap();
+                    }
+                    write!(
                         stdout,
                         "{}{}{}",
                         color::Fg(color::LightCyan),
-                        termion::cursor::Goto(1, (text.curr_line_ind) as u16),
+                        termion::cursor::Goto(1, (text.curr_line_ind + 1) as u16),
                         l
-                    );
+                    )
+                    .unwrap();
                     text.curr_line_ind += 1;
-                    writer.unwrap();
                 }
                 // text.curr_line_ind += 1;
                 text.curr_word_ind = 0;
@@ -288,15 +287,19 @@ fn main() {
             (true, Some(NavCommand::PrevLine)) => {
                 if text.curr_line_ind == 0 {
                     write!(stdout, "{}", termion::clear::All).unwrap();
+                } else if text.curr_line_ind == 1 {
+                    write!(stdout, "{}", termion::clear::CurrentLine).unwrap();
+                    text.curr_line_ind -= 1;
                 } else if text.curr_line_ind > 0 {
                     write!(stdout, "{}", termion::clear::CurrentLine).unwrap();
                     text.curr_line_ind -= 1;
                     write!(
                         stdout,
-                        "{}{}{}",
+                        "{}{}{}{}",
                         termion::cursor::Goto(1, text.curr_line_ind as u16),
+                        termion::clear::CurrentLine,
                         color::Fg(color::LightCyan),
-                        text.get_line(&text.curr_line_ind).unwrap()
+                        text.get_line(&(text.curr_line_ind - 1)).unwrap()
                     )
                     .unwrap();
                 }
@@ -306,6 +309,11 @@ fn main() {
                 // If entering navigation mode and 'v' is the first key pressed, clear the leftover text about how to navigate a text
                 if (text.curr_line_ind == 0) & (text.curr_word_ind == 0) {
                     write!(stdout, "{}", termion::clear::All).unwrap();
+                }
+
+                if (text.curr_word_ind == 0) || (text.curr_word_ind == text.length) {
+                    text.curr_line_ind += 1;
+                    write!(stdout, "{}", cursor::Goto(1, text.curr_line_ind as u16)).unwrap();
                 }
 
                 if let Some(word) = text.get_word(&text.curr_line_ind, &text.curr_word_ind) {
