@@ -143,12 +143,12 @@ fn main() {
 
         // Classic developer panic
         if key == &Key::Ctrl('c') {
-            break;
+            exit_gracefully(&mut stdout)
         };
 
         // Main menu
         match (state.entering_text, state.navigating_text, NavMenu::from_event(key)) {
-            (false, _, Some(NavMenu::Quit)) => break,
+            (false, _, Some(NavMenu::Quit)) => exit_gracefully(&mut stdout),
             (false, false, Some(NavMenu::Help)) =>  write!(
                 stdout,
                 "{}{}{bold}{italic}Mnemo{reset} is a tiny app to help you memorise short texts like poems, book openings, or quotes.{}Save the text into {italic}'texts/'{reset} and then run {bold}{italic}Mnemo{reset}
@@ -381,9 +381,8 @@ fn collect_text(query: &str, stdout: &mut RawTerminal<Stdout>) -> Text {
             &text_fpath,
         )
         .unwrap();
-        stdout.suspend_raw_mode().unwrap();
-        println!("");
-        process::exit(1);
+        exit_gracefully(stdout);
+        String::from("")
     });
 
     // Each string has to be owned
@@ -419,4 +418,12 @@ fn intro_message(stdout: &mut RawTerminal<Stdout>) {
         hide_cursor = termion::cursor::Hide
     )
     .unwrap();
+}
+
+
+fn exit_gracefully(stdout: &mut RawTerminal<Stdout>) {
+    stdout.suspend_raw_mode().unwrap();
+    // Newline required otherwise zsh prints a '%' to denote a missing newline
+    println!("");
+    process::exit(1);
 }
