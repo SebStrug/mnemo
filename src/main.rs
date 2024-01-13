@@ -1,5 +1,6 @@
 use std::fs;
 use std::io::{stdin, stdout, Stdout, Write};
+use std::process;
 
 use termion::color;
 use termion::event::Key;
@@ -271,7 +272,7 @@ fn collect_text(query: &str) -> Text {
         Ok(c) => c,
         Err(_) => {
             println!("\nNo such text found {:?}", &text_fpath);
-            panic!("No text found");
+            process::exit(1);
         }
     };
     // Each string has to be owned
