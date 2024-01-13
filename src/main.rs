@@ -154,7 +154,10 @@ fn main() {
             (true, Key::Char('\n')) => {
                 state.entering_text = false;
                 state.navigating_text = true;
-                text = collect_text(&state.requested_text);
+                text = collect_text(&state.requested_text, &mut stdout);
+                if text.length == 0 {
+                    break;
+                }
                 write!(
                     stdout,
                     "{}{}Entered text: {}
@@ -248,6 +251,9 @@ fn main() {
     }
 
     write!(stdout, "{}", termion::cursor::Show).unwrap();
+    // Raw mode is restored going out of scope, this is just to stop zsh adding a '%' for terminal exiting without a newline
+    stdout.suspend_raw_mode().unwrap();
+    println!("");
 }
 
 fn collect_all_texts() -> Vec<String> {
@@ -261,20 +267,27 @@ fn collect_all_texts() -> Vec<String> {
     text_paths
 }
 
-fn collect_text(query: &str) -> Text {
+fn collect_text(query: &str, stdout: &mut RawTerminal<Stdout>) -> Text {
     // Artisanal hand-crafted path
     let mut text_fpath = "texts/".to_owned();
     text_fpath.push_str(query);
     text_fpath.push_str(".txt");
     let text_fpath = &text_fpath[..];
 
-    let contents = match fs::read_to_string(text_fpath) {
-        Ok(c) => c,
-        Err(_) => {
-            println!("\nNo such text found {:?}", &text_fpath);
-            process::exit(1);
-        }
-    };
+    let contents = fs::read_to_string(text_fpath).unwrap_or_else(|_| {
+        write!(
+            stdout,
+            "{}{}{}{}",
+            termion::clear::All,
+            termion::cursor::Goto(1, 1),
+            "No text found at path: ",
+            &text_fpath,
+        )
+        .unwrap();
+        stdout.suspend_raw_mode().unwrap();
+        println!("");
+        process::exit(1);
+    });
     // Each string has to be owned
     let text = contents.split('\n').map(|s| s.to_owned()).collect();
     Text::new(text)
