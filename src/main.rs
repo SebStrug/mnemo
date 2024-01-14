@@ -133,12 +133,15 @@ fn main() {
         if (state.navigating_text) && (text.prev_key == Some(Key::Char('\n'))) {
             stdout_state.clear_all(&mut stdout);
         }
+        let prev_command = match text.prev_key {
+            Some(k) => NavCommand::from_event(Some(&k)),
+            None => None,
+        };
 
         // Navigating the text
-        match (state.navigating_text, NavCommand::from_event(key)) {
+        match (state.navigating_text, NavCommand::from_event(Some(key))) {
             (true, Some(NavCommand::NextLine)) => {
-                // Print the whole current line if we've already revealed some words
-                if text.prev_key == Some(Key::Char('v')) {
+                if prev_command == Some(NavCommand::NextWord) {
                     // If we've shown words, show the whole line and reset the state
                     text.redisplay_current_line(&mut stdout, &mut stdout_state);
                     text.curr_line_ind += 1;
@@ -165,8 +168,7 @@ fn main() {
             }
 
             (true, Some(NavCommand::PrevLine)) => {
-                // Previous line after asking for new word
-                if text.prev_key == Some(Key::Char('v')) {
+                if prev_command == Some(NavCommand::NextWord) {
                     stdout_state.reset_curr_line(&mut stdout);
                     text.curr_line_ind += 1;
                 }
@@ -196,8 +198,8 @@ fn main() {
 
             (true, Some(NavCommand::NextWord)) => {
                 // If previous key was a new line, show new words on next line
-                if (text.prev_key == Some(Key::Char('c')))
-                    || (text.prev_key == Some(Key::Char('x')))
+                if (prev_command == Some(NavCommand::NextLine))
+                    || (prev_command == Some(NavCommand::PrevLine))
                 {
                     // Redisplay our last line, with no colours
                     text.curr_line_ind -= 1;

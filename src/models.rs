@@ -26,6 +26,7 @@ impl NavMenu {
     }
 }
 
+#[derive(PartialEq)]
 pub enum NavCommand {
     FromBeginning,
     PrevLine,
@@ -34,13 +35,16 @@ pub enum NavCommand {
 }
 
 impl NavCommand {
-    pub fn from_event(char: &Key) -> Option<Self> {
+    pub fn from_event(char: Option<&Key>) -> Option<Self> {
         match char {
-            Key::Char('z') => Some(Self::FromBeginning),
-            Key::Char('x') => Some(Self::PrevLine),
-            Key::Char('c') => Some(Self::NextLine),
-            Key::Char('v') => Some(Self::NextWord),
-            _ => None,
+            Some(c) => match c {
+                Key::Char('z') => Some(Self::FromBeginning),
+                Key::Char('x') => Some(Self::PrevLine),
+                Key::Char('c') => Some(Self::NextLine),
+                Key::Char('v') => Some(Self::NextWord),
+                _ => None,
+            },
+            None => None,
         }
     }
 }
