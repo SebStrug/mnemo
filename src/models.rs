@@ -77,8 +77,8 @@ impl StdoutState {
         write!(
             stdout,
             "{}{}",
+            cursor::Goto(1, self.curr_row),
             clear::CurrentLine,
-            cursor::Goto(1, self.curr_row)
         )
         .unwrap();
     }
@@ -92,6 +92,7 @@ pub struct Line {
 
 pub struct Text {
     pub lines: Vec<Line>,
+    // The current line is actually the line *to be shown*
     pub curr_line_ind: usize,
     pub curr_word_ind: usize,
     pub length: usize,
@@ -151,12 +152,16 @@ impl Text {
     }
 
     // Text struct and stdout state are linked
-    pub fn redisplay_current_line(&mut self, stdout: &mut RawTerminal<Stdout>) {
+    pub fn redisplay_current_line(
+        &mut self,
+        stdout: &mut RawTerminal<Stdout>,
+        stdout_state: &mut StdoutState,
+    ) {
         write!(
             stdout,
             "{}{}{}",
             clear::CurrentLine,
-            cursor::Goto(1, self.curr_line_ind as u16),
+            cursor::Goto(1, stdout_state.curr_row),
             self.get_line(&self.curr_line_ind).unwrap(),
         )
         .unwrap();

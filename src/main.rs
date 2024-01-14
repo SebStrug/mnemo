@@ -140,7 +140,7 @@ fn main() {
                 // Print the whole current line if we've already revealed some words
                 if text.prev_key == Some(Key::Char('v')) {
                     // If we've shown words, show the whole line and reset the state
-                    text.redisplay_current_line(&mut stdout);
+                    text.redisplay_current_line(&mut stdout, &mut stdout_state);
                     text.curr_line_ind += 1;
                 }
 
@@ -165,6 +165,12 @@ fn main() {
             }
 
             (true, Some(NavCommand::PrevLine)) => {
+                // Previous line after asking for new word
+                if text.prev_key == Some(Key::Char('v')) {
+                    stdout_state.reset_curr_line(&mut stdout);
+                    text.curr_line_ind += 1;
+                }
+
                 // The current text line is one ahead of the last printed one
                 // So we must tackle the 1st index separately to avoid uint overflow
                 if text.curr_line_ind == 1 {
@@ -185,23 +191,25 @@ fn main() {
                     // Make current line again ahead of last printed line
                     text.curr_line_ind += 1;
                 }
-                text.curr_word_ind = 1;
+                text.curr_word_ind = 0;
             }
 
             (true, Some(NavCommand::NextWord)) => {
                 // If previous key was a new line, show new words on next line
-                if text.prev_key == Some(Key::Char('c')) {
+                if (text.prev_key == Some(Key::Char('c')))
+                    || (text.prev_key == Some(Key::Char('x')))
+                {
                     // Redisplay our last line, with no colours
-                    write!(
-                        stdout,
-                        "{}{}{}",
-                        clear::CurrentLine,
-                        cursor::Goto(1, text.curr_line_ind as u16),
-                        text.get_line(&(text.curr_line_ind - 1)).unwrap(),
-                    )
-                    .unwrap();
+                    text.curr_line_ind -= 1;
+                    text.redisplay_current_line(&mut stdout, &mut stdout_state);
+                    // Back to the current line being the next one
+                    text.curr_line_ind += 1;
                     stdout_state.move_to_next_line(&mut stdout);
                     maybe_print_word(&mut stdout_state, &mut text, &mut stdout)
+                } else if text.get_line(&text.curr_line_ind).unwrap() == String::from("") {
+                    stdout_state.move_to_next_line(&mut stdout);
+                    text.curr_line_ind += 1;
+                    text.show_curr_line(&mut stdout);
                 } else {
                     maybe_print_word(&mut stdout_state, &mut text, &mut stdout);
                 }
@@ -243,7 +251,7 @@ fn maybe_print_word(
             stdout,
             "{}{}{}{}",
             color::Fg(color::Yellow),
-            cursor::Goto((part_line.len() + 1) as u16, (text.curr_line_ind) as u16),
+            cursor::Goto((part_line.len() + 1) as u16, stdout_state.curr_row),
             word_to_print,
             color::Fg(color::Reset),
         )
