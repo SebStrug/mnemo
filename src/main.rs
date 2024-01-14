@@ -166,22 +166,21 @@ fn main() {
             }
 
             (true, Some(NavCommand::PrevLine)) => {
-                if text.curr_line_ind > 0 {
+                // The current text line is one ahead of the last printed one
+                // So we must tackle the 1st index separately to avoid uint overflow
+                if text.curr_line_ind == 1 {
+                    text.curr_line_ind -= 1;
+                    stdout_state.reset_curr_line(&mut stdout);
+                }
+                else if text.curr_line_ind > 0 {
                     write!(stdout, "Current text line: {}, stdout row: {}", &text.curr_line_ind, &stdout_state.curr_row).unwrap();
-                    // stdout_state.reset_curr_line(&mut stdout);
-                    // stdout_state.move_to_prev_line(&mut stdout);
-                    // stdout_state.reset_curr_line(&mut stdout);
-                    // // We're currently looking at the next line, go back to the previous one
-                    // text.curr_line_ind -= 2;
-                    // // Show the line in cyan
-                    // write!(
-                    //     stdout,
-                    //     "{}{}{}",
-                    //     color::Fg(color::LightCyan),
-                    //     &text.get_line(&text.curr_line_ind).unwrap(),
-                    //     color::Fg(color::Reset),
-                    // )
-                    // .unwrap();
+                    // Current line text is one ahead of last printed one
+                    stdout_state.reset_curr_line(&mut stdout);
+                    stdout_state.move_to_prev_line(&mut stdout);
+                    text.curr_line_ind -= 2;
+                    text.show_curr_line(&mut stdout);
+                    // Make current line again ahead of last printed line
+                    text.curr_line_ind += 1;
                 }
                 text.curr_word_ind = 1;
             }
@@ -223,7 +222,7 @@ fn maybe_print_word(stdout_state: &mut StdoutState, text: &mut Text, stdout: &mu
         let part_line = text
             .get_line_up_to_word(&text.curr_line_ind, &text.curr_word_ind)
             .unwrap();
-        let word_to_print = if text.curr_word_ind == 1 {
+        let word_to_print = if text.curr_word_ind == 0 {
             word
         } else {
             format!(" {}", word)
