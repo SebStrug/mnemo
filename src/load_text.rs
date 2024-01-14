@@ -1,13 +1,27 @@
 use std::fs;
 use std::io::{Stdout, Write};
 
+use std::env;
+use std::path;
 use termion::raw::RawTerminal;
 
 use crate::models::{Line, Text};
 use crate::utils;
 
+fn get_texts_dir() -> path::PathBuf {
+    let mut home_dir = if cfg!(target_os = "windows") {
+        env::var("USERPROFILE").ok().map(path::PathBuf::from)
+    } else {
+        env::var("HOME").ok().map(path::PathBuf::from)
+    }
+    .unwrap();
+    home_dir.push(".mnemo/texts");
+    home_dir
+}
+
 pub fn collect_all_texts() -> Vec<String> {
-    let dir_entries = fs::read_dir("texts/").unwrap();
+    let texts_dir = get_texts_dir();
+    let dir_entries = fs::read_dir(texts_dir).unwrap();
     let mut text_paths: Vec<String> = Vec::new();
     for dir_entry in dir_entries {
         let path = dir_entry.unwrap().path();
@@ -19,10 +33,11 @@ pub fn collect_all_texts() -> Vec<String> {
 
 pub fn collect_text(query: &str, stdout: &mut RawTerminal<Stdout>) -> Text {
     // Artisanal hand-crafted path
-    let mut text_fpath = "texts/".to_owned();
-    text_fpath.push_str(query);
-    text_fpath.push_str(".txt");
-    let text_fpath = &text_fpath[..];
+    let texts_dir = get_texts_dir();
+    let mut text_fpath = texts_dir.to_owned();
+    text_fpath.push(query);
+    text_fpath.set_extension("txt");
+    let text_fpath = text_fpath.to_str().unwrap();
 
     let contents = fs::read_to_string(text_fpath).unwrap_or_else(|_| {
         write!(
