@@ -3,7 +3,7 @@ use std::io::{Stdout, Write};
 
 use termion::raw::RawTerminal;
 
-use crate::models::{Text,Line};
+use crate::models::{Line, Text};
 use crate::utils;
 
 pub fn collect_all_texts() -> Vec<String> {
@@ -45,7 +45,10 @@ pub fn collect_text(query: &str, stdout: &mut RawTerminal<Stdout>) -> Text {
         for word in split_line.split(' ') {
             words.push(word.to_string());
         }
-        all_lines.push(Line { words: words });
+        all_lines.push(Line {
+            words: words.clone(),
+            length: words.len(),
+        });
     }
     Text::new(all_lines)
 }

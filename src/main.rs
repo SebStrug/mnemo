@@ -12,7 +12,7 @@ mod load_text;
 mod models;
 mod utils;
 
-use crate::models::{MnemoState, NavCommand, NavMenu, Text};
+use crate::models::{MnemoState, NavCommand, NavMenu, StdoutState, Text};
 
 fn main() {
     let stdin = stdin();
@@ -31,6 +31,11 @@ fn main() {
         curr_line_ind: 0,
         curr_word_ind: 0,
         length: 0,
+        prev_key: None,
+    };
+    let mut stdout_state = StdoutState {
+        curr_row: 1,
+        curr_col: 1,
     };
 
     for c in stdin.keys() {
@@ -124,114 +129,84 @@ fn main() {
             _ => (),
         }
 
+        // When entering navigation mode, clear the leftover helping info about how to navigate a text
+        if (state.navigating_text) && (text.prev_key == Some(Key::Char('\n'))) {
+            stdout_state.clear_all(&mut stdout);
+        }
+
         // Navigating the text
         match (state.navigating_text, NavCommand::from_event(key)) {
             (true, Some(NavCommand::NextLine)) => {
-                // When entering navigation mode, clear the leftover helping info about how to navigate a text
-                if (text.curr_word_ind == 0) & (text.curr_line_ind == 0) {
-                    write!(stdout, "{}", clear::All).unwrap();
-                }
-
                 // Print the whole current line if we've already revealed some words
-                if text.curr_word_ind > 0 {
-                    write!(
-                        stdout,
-                        "{}{}{}",
-                        clear::CurrentLine,
-                        cursor::Goto(1, text.curr_line_ind as u16),
-                        text.get_line(&text.curr_line_ind).unwrap()
-                    )
-                    .unwrap();
+                if text.prev_key == Some(Key::Char('v')) {
+                    text.redisplay_current_line(&mut stdout);
+                    stdout_state.move_to_next_line(&mut stdout);
                 } else if text.curr_word_ind == text.length {
-                    text.curr_line_ind += 1;
+                    stdout_state.move_to_next_line(&mut stdout);
                 }
-                // We may have no more lines to print
-                if let Some(l) = text.get_line(&text.curr_line_ind) {
-                    // If there's a previous line, remove its color
-                    if text.curr_line_ind > 0 {
+
+                // At the first line of the text, just show it
+                if text.curr_line_ind == 0 {
+                    text.show_curr_line(&mut stdout);
+                    text.curr_line_ind += 1;
+                // For other lines we remove colour from previous lines
+                } else {
+                    if let Some(l) = text.get_line(&(text.curr_line_ind)) {
+                        // Reshow previous line without color
                         let prev_l = text.get_line(&(text.curr_line_ind - 1)).unwrap();
-                        write!(
-                            stdout,
-                            "{}{}{}",
-                            color::Fg(color::Reset),
-                            cursor::Goto(1, (text.curr_line_ind) as u16),
-                            prev_l
-                        )
-                        .unwrap();
+                        stdout_state.reset_curr_line(&mut stdout);
+                        write!(stdout, "{}", prev_l).unwrap();
+                        
+                        stdout_state.move_to_next_line(&mut stdout);
+                        text.show_line(&mut stdout, &l);
+                        text.curr_line_ind += 1;
                     }
+                }
+                text.curr_word_ind = 0;
+            }
+
+            (true, Some(NavCommand::PrevLine)) => {
+                if text.curr_line_ind > 0 {
+                    write!(stdout, "Current text line: {}, stdout row: {}", &text.curr_line_ind, &stdout_state.curr_row).unwrap();
+                    // stdout_state.reset_curr_line(&mut stdout);
+                    // stdout_state.move_to_prev_line(&mut stdout);
+                    // stdout_state.reset_curr_line(&mut stdout);
+                    // // We're currently looking at the next line, go back to the previous one
+                    // text.curr_line_ind -= 2;
+                    // // Show the line in cyan
+                    // write!(
+                    //     stdout,
+                    //     "{}{}{}",
+                    //     color::Fg(color::LightCyan),
+                    //     &text.get_line(&text.curr_line_ind).unwrap(),
+                    //     color::Fg(color::Reset),
+                    // )
+                    // .unwrap();
+                }
+                text.curr_word_ind = 1;
+            }
+
+            (true, Some(NavCommand::NextWord)) => {
+                // If previous key was a new line, show new words on next line
+                if text.prev_key == Some(Key::Char('c')) {
+                    // Redisplay our last line, with no colours
                     write!(
                         stdout,
                         "{}{}{}",
-                        color::Fg(color::LightCyan),
-                        cursor::Goto(1, (text.curr_line_ind + 1) as u16),
-                        l
-                    )
-                    .unwrap();
-                    text.curr_line_ind += 1;
-                }
-                // text.curr_line_ind += 1;
-                text.curr_word_ind = 0;
-            }
-            (true, Some(NavCommand::PrevLine)) => {
-                if text.curr_line_ind == 0 {
-                    write!(stdout, "{}", clear::All).unwrap();
-                } else if text.curr_line_ind == 1 {
-                    write!(stdout, "{}", clear::CurrentLine).unwrap();
-                    text.curr_line_ind -= 1;
-                } else if text.curr_line_ind > 0 {
-                    write!(stdout, "{}", clear::CurrentLine).unwrap();
-                    text.curr_line_ind -= 1;
-                    write!(
-                        stdout,
-                        "{}{}{}{}",
-                        cursor::Goto(1, text.curr_line_ind as u16),
                         clear::CurrentLine,
-                        color::Fg(color::LightCyan),
-                        text.get_line(&(text.curr_line_ind - 1)).unwrap()
+                        cursor::Goto(1, text.curr_line_ind as u16),
+                        text.get_line(&(text.curr_line_ind - 1)).unwrap(),
                     )
                     .unwrap();
-                }
-                text.curr_word_ind = 0;
-            }
-            (true, Some(NavCommand::NextWord)) => {
-                // If entering navigation mode and 'v' is the first key pressed, clear the leftover text about how to navigate a text
-                if (text.curr_line_ind == 0) & (text.curr_word_ind == 0) {
-                    write!(stdout, "{}", termion::clear::All).unwrap();
-                }
-
-                if (text.curr_word_ind == 0) || (text.curr_word_ind == text.length) {
-                    text.curr_line_ind += 1;
-                    write!(stdout, "{}", cursor::Goto(1, text.curr_line_ind as u16)).unwrap();
-                }
-
-                if let Some(word) = text.get_word(&text.curr_line_ind, &text.curr_word_ind) {
-                    // print previous words
-                    let part_line = text
-                        .get_line_up_to_word(&text.curr_line_ind, &text.curr_word_ind)
-                        .unwrap();
-                    let word_to_print = if text.curr_word_ind == 0 {
-                        word
-                    } else {
-                        format!(" {}", word)
-                    };
-                    write!(
-                        stdout,
-                        "{}{}{}{}{}",
-                        termion::clear::CurrentLine,
-                        termion::cursor::Goto(1, text.curr_line_ind as u16),
-                        part_line,
-                        termion::cursor::Goto(
-                            (part_line.len() + 1) as u16,
-                            text.curr_line_ind as u16
-                        ),
-                        word_to_print,
-                    )
-                    .unwrap();
-                    text.curr_word_ind += 1;
+                    stdout_state.move_to_next_line(&mut stdout);
+                    maybe_print_word(&mut stdout_state, &mut text, &mut stdout)
+                } else {
+                    maybe_print_word(&mut stdout_state, &mut text, &mut stdout);
                 }
             }
             _ => (),
         }
+        text.prev_key = Some(*key);
         stdout.flush().unwrap();
     }
 
@@ -239,6 +214,36 @@ fn main() {
     // Raw mode is restored going out of scope, this is just to stop zsh adding a '%' for terminal exiting without a newline
     stdout.suspend_raw_mode().unwrap();
     println!("");
+}
+
+fn maybe_print_word(stdout_state: &mut StdoutState, text: &mut Text, stdout: &mut RawTerminal<Stdout>) {
+    // May be no words left to show
+    if let Some(word) = text.get_word(&text.curr_line_ind, &text.curr_word_ind) {
+        // Gather previous words before the current one
+        let part_line = text
+            .get_line_up_to_word(&text.curr_line_ind, &text.curr_word_ind)
+            .unwrap();
+        let word_to_print = if text.curr_word_ind == 1 {
+            word
+        } else {
+            format!(" {}", word)
+        };
+
+        stdout_state.reset_curr_line(stdout);
+        // Print all words before current word as cyan, to match new lines
+        write!(stdout, "{}{}", color::Fg(color::LightCyan), part_line,).unwrap();
+        // Print new word as yellow
+        write!(
+            stdout,
+            "{}{}{}{}",
+            color::Fg(color::Yellow),
+            cursor::Goto((part_line.len() + 1) as u16, (text.curr_line_ind) as u16),
+            word_to_print,
+            color::Fg(color::Reset),
+        )
+        .unwrap();
+        text.curr_word_ind += 1;
+    }
 }
 
 fn intro_message(stdout: &mut RawTerminal<Stdout>) {

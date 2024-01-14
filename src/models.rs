@@ -1,4 +1,9 @@
+use std::io::{Stdout, Write};
+use termion::clear;
+use termion::color;
+use termion::cursor;
 use termion::event::Key;
+use termion::raw::RawTerminal;
 
 pub enum NavMenu {
     Quit,
@@ -47,9 +52,42 @@ pub struct MnemoState {
     pub stdout_index: u16,
 }
 
+pub struct StdoutState {
+    pub curr_row: u16,
+    pub curr_col: u16,
+}
+
+impl StdoutState {
+    pub fn clear_all(&mut self, stdout: &mut RawTerminal<Stdout>) {
+        write!(stdout, "{}{}", clear::All, cursor::Goto(1, 1)).unwrap();
+    }
+
+    pub fn move_to_next_line(&mut self, stdout: &mut RawTerminal<Stdout>) {
+        self.curr_row += 1;
+        write!(stdout, "{}", cursor::Goto(1, self.curr_row)).unwrap();
+    }
+
+    pub fn move_to_prev_line(&mut self, stdout: &mut RawTerminal<Stdout>) {
+        self.curr_row -= 1;
+        write!(stdout, "{}", cursor::Goto(1, self.curr_row)).unwrap();
+    }
+
+    // Clear current line & go to start of line
+    pub fn reset_curr_line(&mut self, stdout: &mut RawTerminal<Stdout>) {
+        write!(
+            stdout,
+            "{}{}",
+            clear::CurrentLine,
+            cursor::Goto(1, self.curr_row)
+        )
+        .unwrap();
+    }
+}
+
 #[derive(Clone)]
 pub struct Line {
     pub words: Vec<String>,
+    pub length: usize,
 }
 
 pub struct Text {
@@ -57,6 +95,7 @@ pub struct Text {
     pub curr_line_ind: usize,
     pub curr_word_ind: usize,
     pub length: usize,
+    pub prev_key: Option<Key>,
 }
 
 impl Text {
@@ -67,6 +106,7 @@ impl Text {
             curr_line_ind: 0,
             curr_word_ind: 0,
             length: *len,
+            prev_key: None,
         }
     }
 
@@ -108,5 +148,39 @@ impl Text {
         } else {
             None
         }
+    }
+
+    // Text struct and stdout state are linked
+    pub fn redisplay_current_line(&mut self, stdout: &mut RawTerminal<Stdout>) {
+        write!(
+            stdout,
+            "{}{}{}",
+            clear::CurrentLine,
+            cursor::Goto(1, self.curr_line_ind as u16),
+            self.get_line(&self.curr_line_ind).unwrap(),
+        )
+        .unwrap();
+    }
+
+    pub fn show_curr_line(&mut self, stdout: &mut RawTerminal<Stdout>) {
+        write!(
+            stdout,
+            "{}{}{}",
+            color::Fg(color::LightCyan),
+            self.get_line(&self.curr_line_ind).unwrap(),
+            color::Fg(color::Reset),
+        )
+        .unwrap();
+    }
+
+    pub fn show_line(&mut self, stdout: &mut RawTerminal<Stdout>, l: &String) {
+        write!(
+            stdout,
+            "{}{}{}",
+            color::Fg(color::LightCyan),
+            l,
+            color::Fg(color::Reset),
+        )
+        .unwrap();
     }
 }
