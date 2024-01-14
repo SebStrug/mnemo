@@ -139,10 +139,9 @@ fn main() {
             (true, Some(NavCommand::NextLine)) => {
                 // Print the whole current line if we've already revealed some words
                 if text.prev_key == Some(Key::Char('v')) {
+                    // If we've shown words, show the whole line and reset the state
                     text.redisplay_current_line(&mut stdout);
-                    stdout_state.move_to_next_line(&mut stdout);
-                } else if text.curr_word_ind == text.length {
-                    stdout_state.move_to_next_line(&mut stdout);
+                    text.curr_line_ind += 1;
                 }
 
                 // At the first line of the text, just show it

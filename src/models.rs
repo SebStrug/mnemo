@@ -110,7 +110,7 @@ impl Text {
         }
     }
 
-    fn get_line_by_ind(&self, ind: &usize) -> Option<Line> {
+    pub fn get_line_by_ind(&self, ind: &usize) -> Option<Line> {
         if (ind < &0) || (ind > &(&self.length - 1)) {
             None
         } else {
