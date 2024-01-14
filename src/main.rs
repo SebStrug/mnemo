@@ -156,7 +156,7 @@ fn main() {
                         let prev_l = text.get_line(&(text.curr_line_ind - 1)).unwrap();
                         stdout_state.reset_curr_line(&mut stdout);
                         write!(stdout, "{}", prev_l).unwrap();
-                        
+
                         stdout_state.move_to_next_line(&mut stdout);
                         text.show_line(&mut stdout, &l);
                         text.curr_line_ind += 1;
@@ -171,9 +171,13 @@ fn main() {
                 if text.curr_line_ind == 1 {
                     text.curr_line_ind -= 1;
                     stdout_state.reset_curr_line(&mut stdout);
-                }
-                else if text.curr_line_ind > 0 {
-                    write!(stdout, "Current text line: {}, stdout row: {}", &text.curr_line_ind, &stdout_state.curr_row).unwrap();
+                } else if text.curr_line_ind > 0 {
+                    write!(
+                        stdout,
+                        "Current text line: {}, stdout row: {}",
+                        &text.curr_line_ind, &stdout_state.curr_row
+                    )
+                    .unwrap();
                     // Current line text is one ahead of last printed one
                     stdout_state.reset_curr_line(&mut stdout);
                     stdout_state.move_to_prev_line(&mut stdout);
@@ -215,7 +219,11 @@ fn main() {
     println!("");
 }
 
-fn maybe_print_word(stdout_state: &mut StdoutState, text: &mut Text, stdout: &mut RawTerminal<Stdout>) {
+fn maybe_print_word(
+    stdout_state: &mut StdoutState,
+    text: &mut Text,
+    stdout: &mut RawTerminal<Stdout>,
+) {
     // May be no words left to show
     if let Some(word) = text.get_word(&text.curr_line_ind, &text.curr_word_ind) {
         // Gather previous words before the current one
@@ -230,7 +238,7 @@ fn maybe_print_word(stdout_state: &mut StdoutState, text: &mut Text, stdout: &mu
 
         stdout_state.reset_curr_line(stdout);
         // Print all words before current word as cyan, to match new lines
-        write!(stdout, "{}{}", color::Fg(color::LightCyan), part_line,).unwrap();
+        write!(stdout, "{}{}", color::Fg(color::LightCyan), part_line).unwrap();
         // Print new word as yellow
         write!(
             stdout,
