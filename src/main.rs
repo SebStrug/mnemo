@@ -99,6 +99,7 @@ fn main() {
                     {}Get the next line with 'c'
                     {}Get the previous line with 'x'
                     {}Get the next word with 'v'
+                    {}Start from the beginning with 'z'
                     ",
                     clear::All,
                     cursor::Goto(1, 1),
@@ -106,6 +107,7 @@ fn main() {
                     cursor::Goto(1, 3),
                     cursor::Goto(1, 4),
                     cursor::Goto(1, 5),
+                    cursor::Goto(1, 6),
                 )
                 .unwrap();
             }
@@ -140,6 +142,12 @@ fn main() {
 
         // Navigating the text
         match (state.navigating_text, NavCommand::from_event(Some(key))) {
+            (true, Some(NavCommand::FromBeginning)) => {
+                stdout_state.clear_all(&mut stdout);
+                text.curr_line_ind = 0;
+                text.curr_word_ind = 0;
+            }
+
             (true, Some(NavCommand::NextLine)) => {
                 if prev_command == Some(NavCommand::NextWord) {
                     // If we've shown words, show the whole line and reset the state
@@ -288,7 +296,8 @@ fn intro_message(stdout: &mut RawTerminal<Stdout>) {
 fn help_message(stdout: &mut RawTerminal<Stdout>) {
     write!(
         stdout,
-        "{}{}{bold}{italic}Mnemo{reset} is a tiny app to help you memorise short texts like poems, book openings, or quotes.{}Save the text into {italic}'texts/'{reset} and then run {bold}{italic}Mnemo{reset}
+        "{}{}{bold}{italic}Mnemo{reset} is a tiny app to help you memorise short texts like poems, book openings, or quotes.
+        {}Save the text into {italic}'texts/'{reset} and then run {bold}{italic}Mnemo{reset}
         {}Press 'm' to go back to the main menu",
         clear::All,
         cursor::Goto(1, 1),

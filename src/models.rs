@@ -63,6 +63,8 @@ pub struct StdoutState {
 
 impl StdoutState {
     pub fn clear_all(&mut self, stdout: &mut RawTerminal<Stdout>) {
+        self.curr_col = 1;
+        self.curr_row = 1;
         write!(stdout, "{}{}", clear::All, cursor::Goto(1, 1)).unwrap();
     }
 
